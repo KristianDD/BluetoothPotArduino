@@ -4,38 +4,60 @@
 #include <Wire.h>
 #include <SoftwareSerial.h>
 #include <RtcDS3231.h>
+#include <avr/pgmspace.h>
+
+// ID of the settings block
+#define CONFIG_VERSION "ls1"
+#define SETTING_PREFIX "set_setting:"
 
 RtcDS3231 Rtc;
 int MCU_INT = 12;
 const int chipSelect = 4;
+int waterPump = 6;
 String command = "";
+struct SettingsStruct {
+    char version[4];
+    int water, humidity;
+} settingsStorage = { 
+    CONFIG_VERSION,
+    2000, 800
+};
 
 SoftwareSerial mySerial(7,8);
 
-void setSetting(String setting, int value){
-  Serial.println(setting + ": " + value);
-}
-
 void executeCommand(String command) {
   if(command == "turnOn"){
-     digitalWrite(13, HIGH);
-  } else if(command == "turnOff"){
-    digitalWrite(13, LOW);
-  } else if (command.startsWith("setWaterAmmount")){
-    command.remove(0, sizeof("setWaterAmmount=") - 1);
-    int value = command.toInt();
-    setSetting("waterAmount", value);
+    waterPlant();
+  } else if (command.startsWith(SETTING_PREFIX)){
+    command.remove(0, sizeof(SETTING_PREFIX) - 1);
+    setSetting(command);
   } else if(command == "getData"){
     sendLogData();
+  } else if(command == "getSettings"){
+    sendSettings();
+  }
+}
+
+void setSetting(String command){
+  String settingName;
+  int value;
+
+  if(command.startsWith("setWaterAmmount")){
+    command.remove(0, sizeof("setWaterAmmount=") - 1);
+    value = command.toInt();
+    settingsStorage.water = value;
+  } else {
+    command.remove(0, sizeof("setSoilHumidity=") - 1);
+    value = command.toInt();
+    settingsStorage.humidity = value;
   }
 }
 
 // the setup function runs once when you press reset or power the board
 void setup() {
-  // initialize digital pin 13 as an output.
-  pinMode(13, OUTPUT);
+  pinMode(waterPump, OUTPUT);
+  digitalWrite(waterPump, LOW);
   pinMode(9, OUTPUT);
-  digitalWrite(13, LOW);
   Serial.begin(9600);
   SD.begin(chipSelect);
   Rtc.Begin();
@@ -45,7 +67,6 @@ void serialEvent(){
   while(Serial.available()){
     char input = Serial.read();
     if(input == '!'){
-      Serial.println(command);
       executeCommand(command);
       command = "";
     } else{
@@ -76,16 +97,22 @@ void sendLogData(){
   String buffer;
   File dataLog = SD.open("datalog.txt");
 
-  Serial.println("before while");
+  Serial.print("data@");
   while (dataLog.available()) {
     buffer = dataLog.readStringUntil('\n');
-    Serial.println(buffer);      
-    Serial.println("in while");
+    Serial.print(buffer);      
     buffer = "";
+    if(dataLog.available()){
+      Serial.print(",");
+    }
   }
+  Serial.print("!");
+  
+  SD.remove("datalog.txt");
+}
 
-  Serial.println("After while");
-  SD.remove(filename);
+void sendSettings(){
+  Serial.print("settings@" + String(settingsStorage.water) + "#" + String(settingsStorage.humidity) + "!");
 }
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
@@ -105,15 +132,22 @@ String getDateTime()
             now.Minute(),
             now.Second() );
 
-    Serial.println(datestring);
     return datestring;
+}
+
+void waterPlant(){
+  digitalWrite(waterPump, HIGH);
+  delay(settingsStorage.water);
+  digitalWrite(waterPump, LOW);
 }
 
 
 // the loop function runs over and over again forever
 void loop() {          // wait for a second
   int soilMesurement = getSoilHumidityMesurement();
+  if(soilMesurement <= settingsStorage.humidity){
+    waterPlant();
+  }
   saveMesurements(soilMesurement);
-  Serial.println(soilMesurement); 
   delay(100000);
 }
