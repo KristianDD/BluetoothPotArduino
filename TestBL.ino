@@ -20,7 +20,7 @@ struct SettingsStruct {
     int water, humidity;
 } settingsStorage = { 
     CONFIG_VERSION,
-    2000, 800
+    5000, 40
 };
 
 SoftwareSerial mySerial(7,8);
@@ -145,9 +145,12 @@ void waterPlant(){
 // the loop function runs over and over again forever
 void loop() {          // wait for a second
   int soilMesurement = getSoilHumidityMesurement();
-  if(soilMesurement <= settingsStorage.humidity){
+  int humidityMesurementTreshold = 1023 - (settingsStorage.humidity*10.23);
+  Serial.println(humidityMesurementTreshold);
+  Serial.println(soilMesurement);
+  if(soilMesurement >= humidityMesurementTreshold){
     waterPlant();
   }
   saveMesurements(soilMesurement);
-  delay(100000);
+  delay(1000);
 }
