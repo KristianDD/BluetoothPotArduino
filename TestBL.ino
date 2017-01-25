@@ -2,7 +2,6 @@
 #include <SPI.h>
 #include <SD.h>
 #include <Wire.h>
-#include <SoftwareSerial.h>
 #include <RtcDS3231.h>
 #include <avr/pgmspace.h>
 
@@ -15,6 +14,7 @@ int MCU_INT = 12;
 const int chipSelect = 4;
 int waterPump = 6;
 String command = "";
+uint8_t previousHours = 25;
 struct SettingsStruct {
     char version[4];
     int water, humidity;
@@ -22,8 +22,6 @@ struct SettingsStruct {
     CONFIG_VERSION,
     5000, 40
 };
-
-SoftwareSerial mySerial(7,8);
 
 void executeCommand(String command) {
   if(command == "turnOn"){
@@ -144,13 +142,16 @@ void waterPlant(){
 
 // the loop function runs over and over again forever
 void loop() {          // wait for a second
-  int soilMesurement = getSoilHumidityMesurement();
-  int humidityMesurementTreshold = 1023 - (settingsStorage.humidity*10.23);
-  Serial.println(humidityMesurementTreshold);
-  Serial.println(soilMesurement);
-  if(soilMesurement >= humidityMesurementTreshold){
-    waterPlant();
+  RtcDateTime now = Rtc.GetDateTime();
+  uint8_t hoursNow = now.Hour();
+
+  if(hoursNow != previousHours){
+    int soilMesurement = getSoilHumidityMesurement();
+    int humidityMesurementTreshold = 1023 - (settingsStorage.humidity*10.23);
+    previousHours = hoursNow;
+    if(soilMesurement >= humidityMesurementTreshold){
+      waterPlant();
+    }
+    saveMesurements(soilMesurement);
   }
-  saveMesurements(soilMesurement);
-  delay(1000);
 }
