@@ -95,6 +95,12 @@ void sendLogData(){
   String buffer;
   File dataLog = SD.open("datalog.txt");
 
+  if(!dataLog.available())
+  {
+    dataLog.close();
+    return;
+  }
+  
   Serial.print("data@");
   while (dataLog.available()) {
     buffer = dataLog.readStringUntil('\n');
@@ -105,7 +111,7 @@ void sendLogData(){
     }
   }
   Serial.print("!");
-  
+  dataLog.close();
   SD.remove("datalog.txt");
 }
 
